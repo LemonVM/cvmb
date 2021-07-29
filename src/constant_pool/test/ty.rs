@@ -35,7 +35,7 @@ fn test_ty_builder() {
     let builded = TypeBuilder::new()
         .set_name("Gay".to_string())
         .add_layout(
-            LayoutBuilder::new()
+            &LayoutBuilder::new()
                 .add_field(Some("gay".to_string()), 114)
                 .build(),
         )

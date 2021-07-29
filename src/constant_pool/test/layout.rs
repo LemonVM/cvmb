@@ -1,4 +1,4 @@
-use bytes::{BufMut, Bytes};
+use bytes::Bytes;
 
 use crate::{
     read_write::{Read, Write},

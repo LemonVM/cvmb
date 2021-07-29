@@ -3,7 +3,7 @@ use std::{collections::HashSet, vec};
 use crate::read_write::{read_vec, write_vec, Read, Write};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize,PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Layout {
     pub id: u32,
     /// 0xFF 0xFF means dynamic lengthed, 0x00 means a tag

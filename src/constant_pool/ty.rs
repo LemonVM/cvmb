@@ -1,8 +1,6 @@
-use std::collections::HashSet;
-
 use crate::{
     read_write::{read_vec, write_vec, Read, Write},
-    BuildedLayout, LayoutBuilder,
+    BuildedLayout,
 };
 use serde::{Deserialize, Serialize};
 
@@ -52,8 +50,8 @@ impl TypeBuilder {
         self.name = Some(name);
         self
     }
-    pub fn add_layout(mut self, layout: BuildedLayout) -> Self {
-        self.layouts.push(layout);
+    pub fn add_layout(mut self, layout: &BuildedLayout) -> Self {
+        self.layouts.push(layout.clone());
         self
     }
     pub fn build(self) -> Self {

@@ -1,6 +1,10 @@
-use crate::read_write::{Read, Write, read_vec, write_vec};
+use crate::read_write::{read_vec, write_vec, Read, Write};
 use serde::{Deserialize, Serialize};
-use std::{collections::{HashMap, HashSet}, fmt::Debug, ptr::read};
+use std::{
+    cmp::Ordering,
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+};
 
 #[cfg(test)]
 mod test;
@@ -12,7 +16,7 @@ pub use constant::*;
 pub use layout::*;
 pub use ty::*;
 
-#[derive(Debug, Clone, Serialize, Deserialize,PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConstantPool {
     /// the data section
     string_pool: Vec<u8>,
@@ -40,26 +44,28 @@ impl ConstantPoolBuilder {
     /// add constant if type exist, else add both type and constant
     pub fn add_constants(
         mut self,
-        ty: TypeBuilder,
-        layout: BuildedLayout,
+        ty: &TypeBuilder,
+        layout: &BuildedLayout,
         constant: Vec<u8>,
     ) -> Self {
         match self.types.get(&ty) {
             Some(_) => {
-                self.constants.insert((ty, layout, constant));
+                self.constants
+                    .insert((ty.clone(), layout.clone(), constant));
             }
             None => {
                 self.types.insert(ty.clone());
-                self.constants.insert((ty, layout, constant));
+                self.constants
+                    .insert((ty.clone(), layout.clone(), constant));
             }
         };
         self
     }
+
     pub fn build(self) -> ConstantPool {
-        let mut dublicated_symbols = 0;
-        let mut symbol_counter = 0;
-        let mut symbols = HashSet::new();
-        let mut symbols_with_ids: HashMap<String, u32> = HashMap::new();
+        let mut dup_string_size: u64 = 0;
+        let mut strings = HashSet::new();
+        let mut strings_with_conters = HashMap::new();
 
         let mut layouts = vec![];
         let mut types = vec![];
@@ -68,21 +74,29 @@ impl ConstantPoolBuilder {
         let mut builded_layout_ids = HashMap::new();
         let mut type_builder_type_with_ids = HashMap::new();
 
-        let mut add_symbol = |name: Option<String>| match name {
-            Some(name) => {
-                if symbols.insert(name.clone()) {
-                    symbols_with_ids.insert(name, symbol_counter);
-                    symbol_counter += 1;
-                } else {
-                    dublicated_symbols += 1;
-                }
-                symbol_counter - 1
+        // returns the offset
+        let mut add_string = |mut str: Vec<u8>| match strings.get(&str) {
+            Some(key) => {
+                dup_string_size += str.len() as u64;
+                *strings_with_conters.get(key).unwrap()
             }
+            None => {
+                let res = string_pool.len() as u64;
+                // remove duplicates
+                strings.insert(str.clone());
+                strings_with_conters.insert(str.clone(), res);
+                string_pool.append(&mut str);
+                res
+            }
+        };
+
+        let mut add_symbol = |name: Option<String>| match name {
+            Some(name) => add_string(name.as_bytes().to_vec()),
             None => 0xFFFFFFFF,
         };
 
         for ty in self.types {
-            let name = add_symbol(ty.name.clone());
+            let name = add_symbol(ty.name.clone()) as u32;
             let start_layouts_len = layouts.len() as u32;
             for BuildedLayout {
                 length,
@@ -92,7 +106,7 @@ impl ConstantPoolBuilder {
             {
                 let mut field_ids = Vec::with_capacity(field_length.len());
                 for field_name in field_names {
-                    field_ids.push(add_symbol(field_name.clone()));
+                    field_ids.push(add_symbol(field_name.clone()) as u32);
                 }
                 let layout = Layout {
                     id: layouts.len() as u32,
@@ -121,11 +135,14 @@ impl ConstantPoolBuilder {
             types.push(final_type);
             type_builder_type_with_ids.insert(ty, types.len() as u32 - 1);
         }
-        for mut cont in self.constants {
+
+        for cont in self.constants {
             let ty = *type_builder_type_with_ids.get(&cont.0).unwrap();
-            let data_offset = string_pool.len() as u64;
             let layout = *builded_layout_ids.get(&cont.1).unwrap() as u32;
-            string_pool.append(&mut cont.2);
+
+            // duplicate string removal
+            let data_offset = add_string(cont.2);
+
             let constant = Constant {
                 ty,
                 layout,
@@ -133,6 +150,15 @@ impl ConstantPoolBuilder {
             };
             constants.push(constant);
         }
+        constants.sort_by(|a, b| {
+            let cmp_ty = a.ty.cmp(&b.ty);
+            if cmp_ty == Ordering::Equal {
+                a.layout.cmp(&b.layout)
+            } else {
+                cmp_ty
+            }
+        });
+        println!("bytes reduced {:?}", dup_string_size);
         ConstantPool {
             string_pool,
             constants,
@@ -142,25 +168,26 @@ impl ConstantPoolBuilder {
     }
 }
 
-impl Read for ConstantPool{
+impl Read for ConstantPool {
     fn read(from: &mut dyn bytes::Buf) -> Self
     where
-        Self: Sized {
-        Self{
+        Self: Sized,
+    {
+        Self {
             string_pool: read_vec(from, &mut |f| f.get_u8()),
-            constants: read_vec(from,&mut |f| Constant::read(f)),
+            constants: read_vec(from, &mut |f| Constant::read(f)),
             layouts: read_vec(from, &mut |f| Layout::read(f)),
-            types: read_vec(from,&mut |f| Type::read(f))
+            types: read_vec(from, &mut |f| Type::read(f)),
         }
     }
 }
 
-impl Write for ConstantPool{
+impl Write for ConstantPool {
     fn write(self, to: &mut dyn bytes::BufMut) {
-        write_vec(&self.string_pool, to, &mut |f,t| t.put_u8(f));
-        write_vec(&self.constants,to,&mut |f,t| f.write(t));
-        write_vec(&self.layouts,to,&mut |f,t| f.write(t));
-        write_vec(&self.types,to,&mut |f,t| f.write(t));
+        write_vec(&self.string_pool, to, &mut |f, t| t.put_u8(f));
+        write_vec(&self.constants, to, &mut |f, t| f.write(t));
+        write_vec(&self.layouts, to, &mut |f, t| f.write(t));
+        write_vec(&self.types, to, &mut |f, t| f.write(t));
     }
 }
 

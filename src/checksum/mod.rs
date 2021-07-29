@@ -16,5 +16,5 @@ pub struct CheckSum {
 }
 
 impl CheckSum {
-    pub fn validate(&self, data: &Bytes) {}
+    pub fn validate(&self, _data: &Bytes) {}
 }

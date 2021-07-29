@@ -1,7 +1,7 @@
 use crate::read_write::{Read, Write};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize,PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Constant {
     pub ty: u32,
     pub layout: u32,
