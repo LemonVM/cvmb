@@ -1,4 +1,20 @@
-#[cfg(test)]
-pub mod test;
+use bytes::Bytes;
+pub use serde::{Deserialize, Serialize};
 
-pub struct CheckSum {}
+#[cfg(test)]
+mod test;
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub enum CheckSumMethod {
+    CRC32,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct CheckSum {
+    method: CheckSumMethod,
+    data: [u8; 32],
+}
+
+impl CheckSum {
+    pub fn validate(&self, data: &Bytes) {}
+}
